@@ -1,0 +1,57 @@
+[package]
+name = "screenshot-history"
+version = "0.1.0"
+description = "Auto-record screenshots with OCR search and timeline browsing."
+authors = ["you"]
+edition = "2021"
+rust-version = "1.77"
+
+# The library that the binary (and Tauri's mobile entry points) link against.
+[lib]
+name = "screenshot_history_lib"
+crate-type = ["staticlib", "cdylib", "rlib"]
+
+[build-dependencies]
+tauri-build = { version = "2", features = [] }
+
+[dependencies]
+tauri = { version = "2", features = ["tray-icon", "image-png"] }
+tauri-plugin-global-shortcut = "2"
+
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+
+# Clipboard access (polling + hash dedupe per spec §4.1).
+arboard = "3"
+
+# Image decode/encode + thumbnail generation (PNG only to keep build light).
+image = { version = "0.25", default-features = false, features = ["png"] }
+
+# SQLite with bundled lib + FTS5 full-text search (spec §4.4).
+rusqlite = { version = "0.32", features = ["bundled"] }
+
+# Hashing for clipboard dedupe.
+md5 = "0.7"
+
+# Timestamps / path date folders.
+chrono = "0.4"
+
+# Unique file names.
+uuid = { version = "1", features = ["v4"] }
+
+[target.'cfg(windows)'.dependencies]
+# Foreground window title (spec §4.2) — native, no extra C deps.
+windows = { version = "0.58", features = [
+  "Win32_Foundation",
+  "Win32_UI_WindowsAndMessaging",
+  "Win32_System_Threading",
+  "Win32_System_ProcessStatus",
+  "Win32_System_DataExchange",
+] }
+
+[profile.release]
+panic = "abort"
+codegen-units = 1
+lto = true
+opt-level = "s"
+strip = true

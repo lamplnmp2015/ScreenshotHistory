@@ -1,0 +1,82 @@
+:root {
+  --bg: #1a1b1e;
+  --bg-elev: #25262b;
+  --bg-elev-2: #2c2e33;
+  --border: #373a40;
+  --text: #e9ecef;
+  --text-dim: #909296;
+  --accent: #5c7cfa;
+  --accent-dim: #4263eb;
+  --danger: #fa5252;
+  --radius: 8px;
+  font-family: system-ui, "Segoe UI", "Microsoft YaHei", Roboto, sans-serif;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body,
+#app {
+  margin: 0;
+  height: 100%;
+  background: var(--bg);
+  color: var(--text);
+}
+
+body {
+  overflow: hidden;
+}
+
+button {
+  font-family: inherit;
+  cursor: pointer;
+  border: none;
+  background: var(--bg-elev-2);
+  color: var(--text);
+  border-radius: 6px;
+  padding: 6px 12px;
+  transition: background 0.12s ease;
+}
+button:hover {
+  background: var(--border);
+}
+button:active {
+  transform: translateY(1px);
+}
+
+input {
+  font-family: inherit;
+  background: var(--bg-elev-2);
+  border: 1px solid var(--border);
+  color: var(--text);
+  border-radius: 6px;
+  padding: 8px 12px;
+  outline: none;
+}
+input:focus {
+  border-color: var(--accent);
+}
+
+::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+::-webkit-scrollbar-thumb {
+  background: var(--border);
+  border-radius: 5px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: #484b50;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+mark {
+  background: var(--accent);
+  color: #fff;
+  border-radius: 3px;
+  padding: 0 2px;
+}
