@@ -1,0 +1,409 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Screenshot History</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      background: #e8e0d8;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      min-height: 100vh;
+      font-family: -apple-system, "SF Pro Text", "Helvetica Neue", Arial, sans-serif;
+      padding: 40px 20px;
+    }
+
+    /* ── Window shell ── */
+    .window {
+      width: 860px;
+      max-width: 100%;
+      border-radius: 12px;
+      box-shadow:
+        0 32px 80px rgba(0,0,0,.28),
+        0 4px 12px rgba(0,0,0,.15),
+        inset 0 1px 0 rgba(255,255,255,.55);
+      overflow: hidden;
+      display: flex;
+      flex-direction: column;
+    }
+
+    /* ── Title bar ── */
+    .titlebar {
+      background: linear-gradient(to bottom, #f0ebe3, #e8e2d9);
+      padding: 13px 16px 11px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      border-bottom: 1px solid #cfc9c0;
+      user-select: none;
+    }
+    .dot {
+      width: 12px; height: 12px; border-radius: 50%;
+      display: inline-block;
+    }
+    .dot.red    { background: #ff5f57; box-shadow: 0 0 0 .5px #e0443e; }
+    .dot.yellow { background: #febc2e; box-shadow: 0 0 0 .5px #d6a123; }
+    .dot.green  { background: #28c840; box-shadow: 0 0 0 .5px #1daa34; }
+    .titlebar-label {
+      flex: 1;
+      text-align: center;
+      font-size: 13px;
+      font-weight: 600;
+      color: #5a5248;
+      letter-spacing: .01em;
+      margin-left: -44px; /* visually centered past the dots */
+    }
+
+    /* ── Body: sidebar + content ── */
+    .body {
+      display: flex;
+      min-height: 540px;
+    }
+
+    /* ── Sidebar ── */
+    .sidebar {
+      width: 220px;
+      flex-shrink: 0;
+      background: linear-gradient(to bottom, #e8e2d8, #dfd9ce);
+      border-right: 1px solid #c8c2b8;
+      padding: 14px 0;
+      display: flex;
+      flex-direction: column;
+      gap: 2px;
+    }
+    .sidebar-title {
+      font-size: 11px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: .08em;
+      color: #9e9488;
+      padding: 4px 16px 8px;
+    }
+    .note-item {
+      padding: 9px 16px;
+      cursor: default;
+      border-radius: 0;
+      transition: background .1s;
+    }
+    .note-item.active {
+      background: linear-gradient(to bottom, #f5c842, #f0b830);
+      box-shadow: inset 0 1px 0 rgba(255,255,255,.4), inset 0 -1px 0 rgba(0,0,0,.08);
+    }
+    .note-item-title {
+      font-size: 13px;
+      font-weight: 600;
+      color: #3a3530;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    .note-item.active .note-item-title { color: #1a1000; }
+    .note-item-preview {
+      font-size: 11.5px;
+      color: #8a8278;
+      margin-top: 2px;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    .note-item.active .note-item-preview { color: #5a4a10; }
+    .note-item-date {
+      font-size: 10.5px;
+      color: #b0a898;
+      margin-top: 2px;
+    }
+    .note-item.active .note-item-date { color: #7a6820; }
+
+    /* ── Content area ── */
+    .content {
+      flex: 1;
+      background: #fdfaf3;
+      position: relative;
+      overflow-y: auto;
+    }
+    /* ruled lines */
+    .content::before {
+      content: '';
+      position: absolute;
+      inset: 0;
+      background-image: repeating-linear-gradient(
+        to bottom,
+        transparent,
+        transparent 27px,
+        #e8e0cc 27px,
+        #e8e0cc 28px
+      );
+      background-position: 0 52px;
+      pointer-events: none;
+      z-index: 0;
+    }
+    /* left red margin line */
+    .content::after {
+      content: '';
+      position: absolute;
+      top: 0; bottom: 0;
+      left: 56px;
+      width: 1px;
+      background: rgba(220, 160, 160, .5);
+      pointer-events: none;
+      z-index: 0;
+    }
+
+    .note-body {
+      position: relative;
+      z-index: 1;
+      padding: 24px 36px 36px 72px;
+      line-height: 28px; /* match ruled line height */
+    }
+
+    .note-date {
+      font-size: 11px;
+      color: #b0a070;
+      text-align: center;
+      margin-bottom: 18px;
+      display: block;
+    }
+
+    h1.note-title {
+      font-size: 22px;
+      font-weight: 700;
+      color: #2a2418;
+      line-height: 28px;
+      margin-bottom: 14px;
+    }
+
+    .note-body p {
+      font-size: 14.5px;
+      color: #3a3428;
+      line-height: 28px;
+      margin-bottom: 0;
+    }
+
+    .note-body .section {
+      margin-top: 14px;
+    }
+
+    .note-body h2 {
+      font-size: 13px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: .07em;
+      color: #9a8860;
+      line-height: 28px;
+      margin-top: 28px;
+      margin-bottom: 0;
+    }
+
+    .feature-list {
+      list-style: none;
+      margin: 0;
+      padding: 0;
+    }
+    .feature-list li {
+      font-size: 14.5px;
+      color: #3a3428;
+      line-height: 28px;
+      padding-left: 20px;
+      position: relative;
+    }
+    .feature-list li::before {
+      content: '✓';
+      position: absolute;
+      left: 0;
+      color: #c89030;
+      font-size: 13px;
+    }
+
+    .tag-row {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      margin-top: 6px;
+    }
+    .tag {
+      font-size: 12px;
+      font-weight: 500;
+      color: #7a6030;
+      background: rgba(200, 160, 40, .15);
+      border: 1px solid rgba(200, 160, 40, .35);
+      border-radius: 5px;
+      padding: 1px 9px;
+      line-height: 22px;
+    }
+
+    .divider {
+      border: none;
+      border-top: 1px solid #e8e0cc;
+      margin: 0;
+    }
+
+    .download-row {
+      display: flex;
+      gap: 12px;
+      flex-wrap: wrap;
+      margin-top: 6px;
+    }
+    .btn {
+      display: inline-flex;
+      align-items: center;
+      gap: 7px;
+      font-size: 13.5px;
+      font-weight: 600;
+      text-decoration: none;
+      padding: 6px 18px;
+      border-radius: 8px;
+      line-height: 22px;
+      transition: filter .15s, transform .1s;
+    }
+    .btn:hover { filter: brightness(1.05); transform: translateY(-1px); }
+    .btn:active { transform: translateY(0); filter: brightness(.97); }
+    .btn-primary {
+      background: linear-gradient(to bottom, #f5c842, #e8aa18);
+      color: #3a2800;
+      box-shadow: 0 2px 6px rgba(200,150,0,.35), inset 0 1px 0 rgba(255,255,255,.5);
+    }
+    .btn-secondary {
+      background: linear-gradient(to bottom, #f0ebe3, #e4ddd4);
+      color: #4a4030;
+      box-shadow: 0 2px 6px rgba(0,0,0,.12), inset 0 1px 0 rgba(255,255,255,.7);
+    }
+    .btn svg { flex-shrink: 0; }
+
+    .footer-note {
+      font-size: 12px;
+      color: #b0a070;
+      margin-top: 4px;
+      line-height: 22px;
+    }
+
+    /* scrollbar */
+    .content::-webkit-scrollbar { width: 8px; }
+    .content::-webkit-scrollbar-track { background: transparent; }
+    .content::-webkit-scrollbar-thumb { background: #d0c8b8; border-radius: 4px; }
+
+    @media (max-width: 640px) {
+      .sidebar { display: none; }
+      .note-body { padding: 20px 20px 32px 20px; }
+      .content::after { display: none; }
+    }
+  </style>
+</head>
+<body>
+
+<div class="window">
+
+  <!-- Title bar -->
+  <div class="titlebar">
+    <span class="dot red"></span>
+    <span class="dot yellow"></span>
+    <span class="dot green"></span>
+    <span class="titlebar-label">备忘录</span>
+  </div>
+
+  <!-- Body -->
+  <div class="body">
+
+    <!-- Sidebar -->
+    <div class="sidebar">
+      <div class="sidebar-title">我的备忘录</div>
+
+      <div class="note-item active">
+        <div class="note-item-title">Screenshot History</div>
+        <div class="note-item-preview">截图自动归档 · OCR 全文搜索</div>
+        <div class="note-item-date">今天</div>
+      </div>
+
+      <div class="note-item">
+        <div class="note-item-title">安装说明</div>
+        <div class="note-item-preview">双击 setup.exe 即可安装…</div>
+        <div class="note-item-date">今天</div>
+      </div>
+
+      <div class="note-item">
+        <div class="note-item-title">快捷键</div>
+        <div class="note-item-preview">Ctrl+Shift+H 显隐窗口…</div>
+        <div class="note-item-date">今天</div>
+      </div>
+
+      <div class="note-item">
+        <div class="note-item-title">从源码构建</div>
+        <div class="note-item-preview">Rust + Node.js + Tauri 2…</div>
+        <div class="note-item-date">今天</div>
+      </div>
+    </div>
+
+    <!-- Content -->
+    <div class="content">
+      <div class="note-body">
+
+        <span class="note-date">2025年6月1日</span>
+
+        <h1 class="note-title">📸 Screenshot History</h1>
+
+        <p>常驻系统托盘的截图历史管理工具。自动记录你的每一张截图，并能通过截图里的文字把它找回来。</p>
+
+        <h2>核心功能</h2>
+        <ul class="feature-list">
+          <li>自动捕获 — 微信/QQ/PrintScreen/Snipping Tool 等工具截图后自动保存，复制图片不会入库</li>
+          <li>OCR 全文搜索 — 中英文识别（内置 Tesseract），按截图里的文字搜索历史</li>
+          <li>时间线浏览 — 倒序缩略图网格，高分屏下依然清晰</li>
+          <li>详情预览 — 滚轮缩放 · 拖拽平移 · 双击复位 · 显示文件名/来源应用</li>
+          <li>灵活删除 — 可只删历史记录，或连磁盘图片一起删</li>
+          <li>系统托盘 + <kbd style="font-size:12px;background:#f0ebe0;border:1px solid #d0c8b0;border-radius:4px;padding:1px 6px;color:#5a4a20">Ctrl+Shift+H</kbd> 全局热键</li>
+        </ul>
+
+        <h2>开箱即用</h2>
+        <p>安装包已内置 Tesseract OCR 引擎和中英文语言模型，安装后无需任何额外配置，OCR 立即可用。</p>
+
+        <h2>技术栈</h2>
+        <div class="tag-row">
+          <span class="tag">Tauri 2</span>
+          <span class="tag">Rust</span>
+          <span class="tag">Vue 3</span>
+          <span class="tag">TypeScript</span>
+          <span class="tag">Pinia</span>
+          <span class="tag">SQLite FTS5</span>
+          <span class="tag">Tesseract OCR</span>
+          <span class="tag">Windows</span>
+        </div>
+
+        <h2>下载</h2>
+        <div class="download-row">
+          <a class="btn btn-primary" href="https://github.com/lamplnmp2015/ScreenshotHistory/releases/latest">
+            <svg width="15" height="15" viewBox="0 0 20 20" fill="currentColor">
+              <path d="M10 2a1 1 0 011 1v9.586l2.293-2.293a1 1 0 111.414 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 111.414-1.414L9 12.586V3a1 1 0 011-1z"/>
+              <path d="M3 15a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1z"/>
+            </svg>
+            下载 setup.exe
+          </a>
+          <a class="btn btn-secondary" href="https://github.com/lamplnmp2015/ScreenshotHistory">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="currentColor">
+              <path d="M12 2C6.477 2 2 6.484 2 12.017c0 4.425 2.865 8.18 6.839 9.504.5.092.682-.217.682-.483 0-.237-.008-.868-.013-1.703-2.782.605-3.369-1.343-3.369-1.343-.454-1.158-1.11-1.466-1.11-1.466-.908-.62.069-.608.069-.608 1.003.07 1.531 1.032 1.531 1.032.892 1.53 2.341 1.088 2.91.832.092-.647.35-1.088.636-1.338-2.22-.253-4.555-1.113-4.555-4.951 0-1.093.39-1.988 1.029-2.688-.103-.253-.446-1.272.098-2.65 0 0 .84-.27 2.75 1.026A9.564 9.564 0 0112 6.844c.85.004 1.705.115 2.504.337 1.909-1.296 2.747-1.027 2.747-1.027.546 1.379.202 2.398.1 2.651.64.7 1.028 1.595 1.028 2.688 0 3.848-2.339 4.695-4.566 4.943.359.309.678.92.678 1.855 0 1.338-.012 2.419-.012 2.747 0 .268.18.58.688.482A10.019 10.019 0 0022 12.017C22 6.484 17.522 2 12 2z"/>
+            </svg>
+            查看源码
+          </a>
+        </div>
+        <p class="footer-note">Windows 10 / 11 x64 · 约 30 MB · 内置 OCR 引擎</p>
+
+        <h2>数据流</h2>
+        <p style="font-family: 'SF Mono', Menlo, Consolas, monospace; font-size: 12.5px; color: #6a5a38; background: rgba(200,160,40,.08); border-radius: 8px; padding: 12px 14px; line-height: 22px; border: 1px solid rgba(200,160,40,.2); margin-top: 6px;">
+          截图工具 → 剪贴板<br>
+          &nbsp;&nbsp;&nbsp;&nbsp;↓ 500ms 轮询 · 哈希去重 · 跳过复制图片<br>
+          保存 PNG + 缩略图 → SQLite<br>
+          &nbsp;&nbsp;&nbsp;&nbsp;↓ 后台 OCR 线程<br>
+          Tesseract (chi_sim+eng) → FTS5 全文索引<br>
+          &nbsp;&nbsp;&nbsp;&nbsp;↓ 实时推送<br>
+          前端列表 / 搜索结果
+        </p>
+
+      </div>
+    </div>
+  </div>
+</div>
+
+</body>
+</html>
