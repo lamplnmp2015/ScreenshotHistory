@@ -53,7 +53,7 @@ async function onDelete(id: number, deleteFile: boolean) {
 
 <template>
   <div class="app">
-    <SearchBar :ocr-ready="ocrReady" :total="store.items.length" @search="onSearch" />
+    <SearchBar :ocr-ready="ocrReady" @search="onSearch" />
     <main class="body">
       <HistoryList :keyword="store.keyword" @open="openShot" />
     </main>

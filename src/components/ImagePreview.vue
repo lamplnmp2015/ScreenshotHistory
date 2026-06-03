@@ -191,7 +191,7 @@ onBeforeUnmount(() => {
             同时删除图片文件
           </label>
           <div class="action-row">
-            <button @click="openImageFolder(shot.id)">📁 在文件夹中显示</button>
+            <button @click="openImageFolder(shot.id)">📁在文件夹中显示</button>
             <button class="danger" @click="emit('delete', shot.id, alsoDeleteFile)">
               {{ alsoDeleteFile ? "🗑 删除记录和图片" : "🗑 删除记录" }}
             </button>

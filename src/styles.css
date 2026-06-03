@@ -1,15 +1,16 @@
 :root {
-  --bg: #1a1b1e;
-  --bg-elev: #25262b;
-  --bg-elev-2: #2c2e33;
-  --border: #373a40;
-  --text: #e9ecef;
-  --text-dim: #909296;
-  --accent: #5c7cfa;
-  --accent-dim: #4263eb;
-  --danger: #fa5252;
-  --radius: 8px;
-  font-family: system-ui, "Segoe UI", "Microsoft YaHei", Roboto, sans-serif;
+  --bg: #f2f2f7;
+  --bg-elev: #ffffff;
+  --bg-elev-2: #f2f2f7;
+  --border: #d1d1d6;
+  --border-light: #e5e5ea;
+  --text: #1c1c1e;
+  --text-dim: #8e8e93;
+  --accent: #007aff;
+  --accent-dim: #0056cc;
+  --danger: #ff3b30;
+  --radius: 10px;
+  font-family: -apple-system, "SF Pro Text", "PingFang SC", "Helvetica Neue", sans-serif;
 }
 
 * {
@@ -33,50 +34,48 @@ button {
   font-family: inherit;
   cursor: pointer;
   border: none;
-  background: var(--bg-elev-2);
+  background: transparent;
   color: var(--text);
   border-radius: 6px;
-  padding: 6px 12px;
-  transition: background 0.12s ease;
+  padding: 5px 11px;
+  font-size: 13px;
+  transition: background 0.1s ease;
 }
 button:hover {
-  background: var(--border);
+  background: rgba(0, 0, 0, 0.06);
 }
 button:active {
-  transform: translateY(1px);
+  background: rgba(0, 0, 0, 0.1);
+  transform: translateY(0.5px);
 }
 
 input {
   font-family: inherit;
-  background: var(--bg-elev-2);
-  border: 1px solid var(--border);
+  background: rgba(118, 118, 128, 0.12);
+  border: none;
   color: var(--text);
-  border-radius: 6px;
-  padding: 8px 12px;
+  border-radius: 8px;
+  padding: 7px 12px;
   outline: none;
+  font-size: 13.5px;
 }
+input::placeholder { color: var(--text-dim); }
 input:focus {
-  border-color: var(--accent);
+  background: rgba(118, 118, 128, 0.18);
+  box-shadow: 0 0 0 3px rgba(0, 122, 255, 0.25);
 }
 
-::-webkit-scrollbar {
-  width: 10px;
-  height: 10px;
-}
+::-webkit-scrollbar { width: 6px; height: 6px; }
 ::-webkit-scrollbar-thumb {
-  background: var(--border);
-  border-radius: 5px;
+  background: rgba(0, 0, 0, 0.18);
+  border-radius: 3px;
 }
-::-webkit-scrollbar-thumb:hover {
-  background: #484b50;
-}
-::-webkit-scrollbar-track {
-  background: transparent;
-}
+::-webkit-scrollbar-thumb:hover { background: rgba(0, 0, 0, 0.3); }
+::-webkit-scrollbar-track { background: transparent; }
 
 mark {
-  background: var(--accent);
-  color: #fff;
+  background: rgba(0, 122, 255, 0.15);
+  color: var(--accent);
   border-radius: 3px;
   padding: 0 2px;
 }

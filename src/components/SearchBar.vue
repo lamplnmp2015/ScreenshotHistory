@@ -1,13 +1,12 @@
 <script setup lang="ts">
 import { ref, watch } from "vue";
 
-const props = defineProps<{ ocrReady: boolean; total: number }>();
+const props = defineProps<{ ocrReady: boolean }>();
 const emit = defineEmits<{ (e: "search", keyword: string): void }>();
 
 const keyword = ref("");
 let timer: ReturnType<typeof setTimeout> | null = null;
 
-// Debounced search (300ms per spec §4.5).
 watch(keyword, (val) => {
   if (timer) clearTimeout(timer);
   timer = setTimeout(() => emit("search", val), 300);
@@ -21,74 +20,58 @@ function clear() {
 <template>
   <div class="searchbar">
     <div class="field">
-      <span class="icon">🔍</span>
+      <svg class="icon" width="14" height="14" viewBox="0 0 20 20" fill="none">
+        <circle cx="8.5" cy="8.5" r="5.5" stroke="currentColor" stroke-width="1.8"/>
+        <path d="M13 13L17 17" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>
+      </svg>
       <input
         v-model="keyword"
         type="text"
-        :placeholder="props.ocrReady ? '搜索截图中的文字…' : '搜索来源 / 文件名…（OCR 未启用）'"
+        :placeholder="props.ocrReady ? '搜索截图里的文字…' : '搜索来源应用…（OCR 未启用）'"
         spellcheck="false"
       />
-      <button v-if="keyword" class="clear" title="清除" @click="clear">✕</button>
-    </div>
-    <div class="meta">
-      <span>{{ props.total }} 张截图</span>
-      <span class="dot" :class="{ on: props.ocrReady }" :title="props.ocrReady ? 'OCR 已启用' : 'OCR 未启用 (未检测到 tesseract)'"></span>
+      <button v-if="keyword" class="clear" title="清除" @click="clear">
+        <svg width="13" height="13" viewBox="0 0 20 20" fill="currentColor">
+          <circle cx="10" cy="10" r="9" fill="rgba(0,0,0,0.18)"/>
+          <path d="M7 7l6 6M13 7l-6 6" stroke="#fff" stroke-width="1.8" stroke-linecap="round"/>
+        </svg>
+      </button>
     </div>
   </div>
 </template>
 
 <style scoped>
 .searchbar {
-  display: flex;
-  align-items: center;
-  gap: 16px;
-  padding: 12px 18px;
-  border-bottom: 1px solid var(--border);
-  background: var(--bg-elev);
+  padding: 10px 14px 8px;
   -webkit-app-region: drag;
 }
 .field {
   position: relative;
-  flex: 1;
   -webkit-app-region: no-drag;
 }
-.field .icon {
+.icon {
   position: absolute;
-  left: 12px;
+  left: 10px;
   top: 50%;
   transform: translateY(-50%);
-  opacity: 0.6;
-  font-size: 13px;
+  color: var(--text-dim);
+  pointer-events: none;
 }
 .field input {
   width: 100%;
-  padding-left: 34px;
+  padding-left: 32px;
+  padding-right: 30px;
 }
 .clear {
   position: absolute;
   right: 6px;
   top: 50%;
   transform: translateY(-50%);
-  padding: 2px 8px;
+  padding: 0;
   background: transparent;
-  color: var(--text-dim);
-}
-.meta {
+  line-height: 0;
   display: flex;
   align-items: center;
-  gap: 8px;
-  color: var(--text-dim);
-  font-size: 13px;
-  white-space: nowrap;
-  -webkit-app-region: no-drag;
 }
-.dot {
-  width: 8px;
-  height: 8px;
-  border-radius: 50%;
-  background: var(--text-dim);
-}
-.dot.on {
-  background: #51cf66;
-}
+.clear:hover { background: transparent; }
 </style>
