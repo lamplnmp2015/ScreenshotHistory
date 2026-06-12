@@ -60,3 +60,8 @@ export function getStats(): Promise<Stats> {
 export function ocrAvailable(): Promise<boolean> {
   return invoke("ocr_available");
 }
+
+/** Re-run OCR on an existing screenshot synchronously. Returns the new text. */
+export function reOcrScreenshot(id: number): Promise<string> {
+  return invoke("reocr_screenshot", { id });
+}

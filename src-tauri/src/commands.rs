@@ -1,8 +1,8 @@
 //! Tauri commands exposed to the frontend (spec §4.5 / §5).
 
-use crate::{db, image_saver, AppState};
+use crate::{db, image_saver, ocr_engine, AppState};
 use std::path::Path;
-use tauri::State;
+use tauri::{AppHandle, Emitter, State};
 
 /// Attach a base64 thumbnail to a DB row for the frontend.
 fn to_dto(row: db::ScreenshotRow) -> db::ScreenshotDto {
@@ -117,6 +117,50 @@ pub fn get_stats(state: State<AppState>) -> Result<db::Stats, String> {
 #[tauri::command]
 pub fn ocr_available(state: State<AppState>) -> bool {
     state.ocr_available
+}
+
+/// Payload for the `ocr-updated` event, emitted both by the async worker and by
+/// the synchronous `reocr_screenshot` command so the list view stays in sync.
+#[derive(serde::Serialize, Clone)]
+struct OcrUpdate {
+    id: i64,
+    ocr_text: String,
+    ocr_status: i64,
+}
+
+/// Re-run OCR on a screenshot that already exists in history (e.g. after the
+/// user clicks "重新识别" in the detail panel). Runs synchronously — the
+/// frontend shows a loading state until the result comes back.
+///
+/// Only overwrites the old OCR text when new text is recognised; an empty
+/// result leaves the existing text untouched so a failed re-scan doesn't
+/// wipe out previously-good OCR.
+#[tauri::command]
+pub fn reocr_screenshot(app: AppHandle, state: State<AppState>, id: i64) -> Result<String, String> {
+    let file_path = {
+        let conn = state.conn.lock().map_err(|_| "db lock poisoned")?;
+        db::get_one(&conn, id)
+            .map_err(|e| e.to_string())?
+            .map(|r| r.file_path)
+            .ok_or_else(|| "screenshot not found".to_string())?
+    };
+    if !Path::new(&file_path).exists() {
+        return Err("image file not found on disk".to_string());
+    }
+    let text = ocr_engine::extract_text(&file_path).map_err(|e| {
+        eprintln!("[ocr] reocr failed for id={}: {e}", id);
+        format!("OCR 失败: {e}")
+    })?;
+    if text.trim().is_empty() {
+        return Err("未识别到文字内容（图片可能没有文字或文字不清晰）".to_string());
+    }
+    {
+        let conn = state.conn.lock().map_err(|_| "db lock poisoned")?;
+        db::set_ocr(&conn, id, &text, db::OCR_DONE).map_err(|e| e.to_string())?;
+    }
+    // Notify the list view so it updates without a full reload.
+    let _ = app.emit("ocr-updated", OcrUpdate { id, ocr_text: text.clone(), ocr_status: db::OCR_DONE });
+    Ok(text)
 }
 
 // --- OS file-manager helpers ------------------------------------------------

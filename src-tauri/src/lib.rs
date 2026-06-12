@@ -136,6 +136,7 @@ pub fn run() {
             commands::open_image_folder,
             commands::get_stats,
             commands::ocr_available,
+            commands::reocr_screenshot,
         ])
         .run(tauri::generate_context!())
         .expect("error while running Screenshot History");

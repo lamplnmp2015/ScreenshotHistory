@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { ref, watch, onBeforeUnmount } from "vue";
-import { getImage, openImageFolder, type Screenshot } from "../api";
+import { getImage, openImageFolder, reOcrScreenshot, type Screenshot } from "../api";
 
 const props = defineProps<{ shot: Screenshot }>();
 const emit = defineEmits<{
@@ -12,6 +12,23 @@ const fullSrc = ref<string | null>(null);
 const loading = ref(true);
 // When true, deleting also removes the image file from disk; default keeps it.
 const alsoDeleteFile = ref(false);
+// Re-OCR state.
+const reocrLoading = ref(false);
+const reocrError = ref("");
+
+async function onReOcr() {
+  reocrLoading.value = true;
+  reocrError.value = "";
+  try {
+    const text = await reOcrScreenshot(props.shot.id);
+    props.shot.ocr_text = text;
+    props.shot.ocr_status = 1; // OCR_DONE
+  } catch (e: any) {
+    reocrError.value = typeof e === "string" ? e : (e?.message ?? "重新识别失败");
+  } finally {
+    reocrLoading.value = false;
+  }
+}
 
 // --- Zoom / pan state for the detail image ---
 const MIN_ZOOM = 1;
@@ -183,6 +200,16 @@ onBeforeUnmount(() => {
             <pre v-else-if="shot.ocr_text">{{ shot.ocr_text }}</pre>
             <span v-else class="muted">无文字内容</span>
           </div>
+          <div class="ocr-actions">
+            <button
+              class="reocr-btn"
+              :disabled="reocrLoading"
+              @click="onReOcr"
+            >
+              {{ reocrLoading ? "识别中…" : "🔄 重新识别" }}
+            </button>
+            <span v-if="reocrError" class="reocr-err">{{ reocrError }}</span>
+          </div>
         </div>
 
         <div class="actions">
@@ -330,6 +357,25 @@ onBeforeUnmount(() => {
 }
 .muted {
   color: var(--text-dim);
+}
+.ocr-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  margin-top: 8px;
+}
+.reocr-btn {
+  font-size: 12px;
+  padding: 4px 12px;
+}
+.reocr-btn:disabled {
+  opacity: 0.55;
+  cursor: wait;
+}
+.reocr-err {
+  font-size: 12px;
+  color: var(--danger);
 }
 .actions {
   display: flex;

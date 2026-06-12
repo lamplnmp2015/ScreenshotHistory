@@ -165,17 +165,24 @@ pub fn extract_text(image_path: &str) -> Result<String, String> {
 fn run_with_lang(image_path: &str, lang: &str) -> Result<String, String> {
     let bin = resolve().ok_or_else(|| "tesseract not found".to_string())?;
 
-    // `tesseract <img> stdout -l <lang>` prints recognised text to stdout.
-    // `--psm 4` (single column of variable-size text) suits screenshots far
-    // better than the default psm 3, which garbles Chinese on short/sparse
-    // captures. Verified on mixed CN/EN test images.
+    // tesseract with the `tsv` config writes TWO files:
+    //   <outputbase>.tsv  — TSV with per-word confidence
+    //   <outputbase>.txt  — plain recognised text
+    // We use the TSV for confidence-filtered output, but fall back to the
+    // plain-text file when TSV filtering produces nothing (e.g. all words
+    // dropped, or the TSV file is malformed).
+    let tmp_base = std::env::temp_dir().join(format!("sh_ocr_{}", uuid::Uuid::new_v4()));
+    let tsv_path = tmp_base.with_extension("tsv");
+    let txt_path = tmp_base.with_extension("txt");
+
     let mut cmd = command_for(bin);
     cmd.arg(image_path)
-        .arg("stdout")
+        .arg(&tmp_base)
         .arg("-l")
         .arg(lang)
         .arg("--psm")
-        .arg("4");
+        .arg("4")
+        .arg("tsv");
     if let Some(td) = tessdata_dir() {
         cmd.arg("--tessdata-dir").arg(td);
     }
@@ -183,11 +190,163 @@ fn run_with_lang(image_path: &str, lang: &str) -> Result<String, String> {
     let output = cmd.output().map_err(|e| format!("spawn tesseract: {e}"))?;
 
     if !output.status.success() {
+        let _ = std::fs::remove_file(&tsv_path);
+        let _ = std::fs::remove_file(&txt_path);
         return Err(format!(
             "tesseract failed ({}): {}",
             lang,
             String::from_utf8_lossy(&output.stderr).trim()
         ));
     }
-    Ok(String::from_utf8_lossy(&output.stdout).trim().to_string())
+
+    let tsv_text = std::fs::read_to_string(&tsv_path).unwrap_or_default();
+    let txt_text = std::fs::read_to_string(&txt_path).unwrap_or_default();
+
+    let _ = std::fs::remove_file(&tsv_path);
+    let _ = std::fs::remove_file(&txt_path);
+
+    // Prefer confidence-filtered TSV result; the quality gate inside
+    // filter_tsv rejects garbled output from partial / icon-only images.
+    if let Some(filtered) = filter_tsv(&tsv_text) {
+        eprintln!("[ocr] TSV filtered ({}): {} chars", lang, filtered.len());
+        return Ok(filtered);
+    }
+
+    // TSV filtering returned None (quality rejected or no word data).
+    // Only fall back to plain text when the TSV file had zero word rows,
+    // which indicates a genuine parsing / file-creation problem — not a
+    // quality rejection.  If tesseract found words but they were low
+    // quality, we trust the rejection and don't fall back.
+    let has_word_data = tsv_text.lines().any(|l| l.starts_with("5\t"));
+    if !has_word_data && !txt_text.is_empty() {
+        eprintln!(
+            "[ocr] TSV has no word data, falling back to plain text ({}): {} chars",
+            lang,
+            txt_text.len()
+        );
+        return Ok(txt_text.trim().to_string());
+    }
+
+    // Either quality rejected, or both TSV + plain text are empty.
+    eprintln!("[ocr] no usable text ({})", lang);
+    Ok(String::new())
+}
+
+/// Minimum per-word confidence (0–100) to keep a word. Tuned so icon/graphic
+/// hallucinations (usually < this) are dropped while genuine text survives.
+const MIN_WORD_CONF: f32 = 55.0;
+
+/// True for CJK ideographs / kana — used to avoid inserting spurious spaces
+/// between Chinese characters when rejoining filtered words.
+fn is_cjk(c: char) -> bool {
+    matches!(c as u32,
+        0x3040..=0x30FF |   // hiragana + katakana
+        0x3400..=0x4DBF |   // CJK ext A
+        0x4E00..=0x9FFF |   // CJK unified
+        0xF900..=0xFAFF |   // CJK compat
+        0xFF00..=0xFFEF     // fullwidth forms
+    )
+}
+
+/// Parse tesseract TSV, keep words with confidence >= MIN_WORD_CONF, and
+/// reconstruct text line by line. Returns `None` when the result is rejected
+/// by the quality gate (too few surviving words, too many dropped, or average
+/// confidence too low) — this prevents garbled output from partial screenshots
+/// or icon-only images from being stored.
+fn filter_tsv(tsv: &str) -> Option<String> {
+    // TSV columns: level page block par line word left top width height conf text
+    let mut lines: Vec<String> = Vec::new();
+    let mut cur_key: Option<(u32, u32, u32)> = None; // (block, par, line)
+    let mut cur = String::new();
+
+    let mut total_words = 0u32;
+    let mut kept_words = 0u32;
+    let mut kept_conf_sum = 0f64;
+
+    let mut flush = |buf: &mut String, out: &mut Vec<String>| {
+        let t = buf.trim();
+        if !t.is_empty() {
+            out.push(t.to_string());
+        }
+        buf.clear();
+    };
+
+    for (i, row) in tsv.lines().enumerate() {
+        if i == 0 {
+            continue; // header
+        }
+        let cols: Vec<&str> = row.split('\t').collect();
+        if cols.len() < 12 {
+            continue;
+        }
+        // Only word-level rows (level 5) carry text + confidence.
+        if cols[0] != "5" {
+            continue;
+        }
+        let conf: f32 = cols[10].parse().unwrap_or(-1.0);
+        let word = cols[11].trim();
+        if word.is_empty() {
+            continue;
+        }
+        total_words += 1;
+        let key = (
+            cols[2].parse().unwrap_or(0),
+            cols[3].parse().unwrap_or(0),
+            cols[4].parse().unwrap_or(0),
+        );
+        if cur_key != Some(key) {
+            flush(&mut cur, &mut lines);
+            cur_key = Some(key);
+        }
+        if conf < MIN_WORD_CONF {
+            continue; // drop low-confidence (icon hallucination) words
+        }
+        kept_words += 1;
+        kept_conf_sum += conf as f64;
+        // Join: no space between two CJK chars, otherwise a single space.
+        if let (Some(prev), Some(next)) = (cur.chars().last(), word.chars().next()) {
+            if !(is_cjk(prev) && is_cjk(next)) {
+                cur.push(' ');
+            }
+        }
+        cur.push_str(word);
+    }
+    flush(&mut cur, &mut lines);
+
+    // ---- quality gate ----
+    // Partial screenshots and icons produce lots of low-confidence noise that
+    // we drop above.  Three checks ensure the *surviving* text is still
+    // trustworthy enough to store:
+    if kept_words < 3 {
+        eprintln!(
+            "[ocr] reject: only {} words passed ({} total)",
+            kept_words, total_words
+        );
+        return None;
+    }
+    let drop_rate = 1.0 - (kept_words as f32 / total_words.max(1) as f32);
+    if drop_rate > 0.6 {
+        eprintln!(
+            "[ocr] reject: {:.0}% words dropped ({}/{} total)",
+            drop_rate * 100.0,
+            total_words - kept_words,
+            total_words
+        );
+        return None;
+    }
+    let avg_conf = kept_conf_sum / kept_words as f64;
+    if avg_conf < 58.0 {
+        eprintln!("[ocr] reject: avg confidence {:.1} < 58", avg_conf);
+        return None;
+    }
+
+    eprintln!(
+        "[ocr] quality ok: {} words, avg conf {:.1}, {:.0}% dropped",
+        kept_words, avg_conf, drop_rate * 100.0
+    );
+    let result = lines.join("\n");
+    if result.is_empty() {
+        return None;
+    }
+    Some(result)
 }
